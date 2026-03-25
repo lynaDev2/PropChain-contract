@@ -1,23 +1,93 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
+pub mod errors;
+
 use ink::prelude::string::String;
 use ink::primitives::AccountId;
+pub use errors::*;
 
 /// Error types for the Property Valuation Oracle
 #[derive(Debug, PartialEq, Eq, scale::Encode, scale::Decode)]
 #[cfg_attr(feature = "std", derive(scale_info::TypeInfo))]
 pub enum OracleError {
+    /// Property not found in the oracle system
     PropertyNotFound,
+    /// Insufficient oracle sources available
     InsufficientSources,
+    /// Valuation data is invalid or out of range
     InvalidValuation,
+    /// Caller is not authorized to perform this operation
     Unauthorized,
+    /// Oracle source does not exist
     OracleSourceNotFound,
+    /// Invalid parameters provided
     InvalidParameters,
+    /// Error from external price feed
     PriceFeedError,
+    /// Price alert not found
     AlertNotFound,
+    /// Oracle source has insufficient reputation
     InsufficientReputation,
+    /// Oracle source already registered
     SourceAlreadyExists,
+    /// Valuation request is still pending
     RequestPending,
+}
+
+impl core::fmt::Display for OracleError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            OracleError::PropertyNotFound => write!(f, "Property not found in the oracle system"),
+            OracleError::InsufficientSources => write!(f, "Insufficient oracle sources available"),
+            OracleError::InvalidValuation => write!(f, "Valuation data is invalid or out of range"),
+            OracleError::Unauthorized => write!(f, "Caller is not authorized to perform this operation"),
+            OracleError::OracleSourceNotFound => write!(f, "Oracle source does not exist"),
+            OracleError::InvalidParameters => write!(f, "Invalid parameters provided"),
+            OracleError::PriceFeedError => write!(f, "Error from external price feed"),
+            OracleError::AlertNotFound => write!(f, "Price alert not found"),
+            OracleError::InsufficientReputation => write!(f, "Oracle source has insufficient reputation"),
+            OracleError::SourceAlreadyExists => write!(f, "Oracle source already registered"),
+            OracleError::RequestPending => write!(f, "Valuation request is still pending"),
+        }
+    }
+}
+
+impl ContractError for OracleError {
+    fn error_code(&self) -> u32 {
+        match self {
+            OracleError::PropertyNotFound => oracle_codes::ORACLE_PROPERTY_NOT_FOUND,
+            OracleError::InsufficientSources => oracle_codes::ORACLE_INSUFFICIENT_SOURCES,
+            OracleError::InvalidValuation => oracle_codes::ORACLE_INVALID_VALUATION,
+            OracleError::Unauthorized => oracle_codes::ORACLE_UNAUTHORIZED,
+            OracleError::OracleSourceNotFound => oracle_codes::ORACLE_SOURCE_NOT_FOUND,
+            OracleError::InvalidParameters => oracle_codes::ORACLE_INVALID_PARAMETERS,
+            OracleError::PriceFeedError => oracle_codes::ORACLE_PRICE_FEED_ERROR,
+            OracleError::AlertNotFound => oracle_codes::ORACLE_ALERT_NOT_FOUND,
+            OracleError::InsufficientReputation => oracle_codes::ORACLE_INSUFFICIENT_REPUTATION,
+            OracleError::SourceAlreadyExists => oracle_codes::ORACLE_SOURCE_ALREADY_EXISTS,
+            OracleError::RequestPending => oracle_codes::ORACLE_REQUEST_PENDING,
+        }
+    }
+
+    fn error_description(&self) -> &'static str {
+        match self {
+            OracleError::PropertyNotFound => "The requested property does not exist in the oracle system",
+            OracleError::InsufficientSources => "Not enough oracle sources are available to provide a reliable valuation",
+            OracleError::InvalidValuation => "The valuation data is invalid, zero, or out of acceptable range",
+            OracleError::Unauthorized => "Caller does not have permission to perform this operation",
+            OracleError::OracleSourceNotFound => "The specified oracle source does not exist",
+            OracleError::InvalidParameters => "One or more function parameters are invalid",
+            OracleError::PriceFeedError => "Failed to retrieve data from external price feed",
+            OracleError::AlertNotFound => "The requested price alert does not exist",
+            OracleError::InsufficientReputation => "Oracle source reputation is below required threshold",
+            OracleError::SourceAlreadyExists => "An oracle source with this identifier already exists",
+            OracleError::RequestPending => "A valuation request for this property is already pending",
+        }
+    }
+
+    fn error_category(&self) -> ErrorCategory {
+        ErrorCategory::Oracle
+    }
 }
 
 /// Trait definitions for PropChain contracts

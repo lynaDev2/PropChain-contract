@@ -1,6 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std, no_main)]
 
 use propchain_traits::ComplianceChecker;
+use propchain_traits::*;
 
 #[ink::contract]
 mod compliance_registry {
@@ -244,17 +245,84 @@ mod compliance_registry {
     #[derive(Debug, PartialEq, Eq, scale::Encode, scale::Decode)]
     #[cfg_attr(feature = "std", derive(scale_info::TypeInfo))]
     pub enum Error {
+        /// Caller is not authorized
         NotAuthorized,
+        /// User is not verified
         NotVerified,
+        /// Verification has expired
         VerificationExpired,
+        /// User has high risk level
         HighRisk,
+        /// Jurisdiction is prohibited
         ProhibitedJurisdiction,
+        /// User already verified
         AlreadyVerified,
+        /// Consent not given
         ConsentNotGiven,
+        /// Data retention period expired
         DataRetentionExpired,
+        /// Invalid risk score
         InvalidRiskScore,
+        /// Invalid document type
         InvalidDocumentType,
+        /// Jurisdiction not supported
         JurisdictionNotSupported,
+    }
+
+    impl core::fmt::Display for Error {
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            match self {
+                Error::NotAuthorized => write!(f, "Caller is not authorized"),
+                Error::NotVerified => write!(f, "User is not verified"),
+                Error::VerificationExpired => write!(f, "Verification has expired"),
+                Error::HighRisk => write!(f, "User has high risk level"),
+                Error::ProhibitedJurisdiction => write!(f, "Jurisdiction is prohibited"),
+                Error::AlreadyVerified => write!(f, "User already verified"),
+                Error::ConsentNotGiven => write!(f, "Consent not given"),
+                Error::DataRetentionExpired => write!(f, "Data retention period expired"),
+                Error::InvalidRiskScore => write!(f, "Invalid risk score"),
+                Error::InvalidDocumentType => write!(f, "Invalid document type"),
+                Error::JurisdictionNotSupported => write!(f, "Jurisdiction not supported"),
+            }
+        }
+    }
+
+    impl ContractError for Error {
+        fn error_code(&self) -> u32 {
+            match self {
+                Error::NotAuthorized => propchain_traits::errors::compliance_codes::COMPLIANCE_UNAUTHORIZED,
+                Error::NotVerified => propchain_traits::errors::compliance_codes::COMPLIANCE_NOT_VERIFIED,
+                Error::VerificationExpired => propchain_traits::errors::compliance_codes::COMPLIANCE_EXPIRED,
+                Error::HighRisk => propchain_traits::errors::compliance_codes::COMPLIANCE_CHECK_FAILED,
+                Error::ProhibitedJurisdiction => propchain_traits::errors::compliance_codes::COMPLIANCE_CHECK_FAILED,
+                Error::AlreadyVerified => propchain_traits::errors::compliance_codes::COMPLIANCE_UNAUTHORIZED,
+                Error::ConsentNotGiven => propchain_traits::errors::compliance_codes::COMPLIANCE_NOT_VERIFIED,
+                Error::DataRetentionExpired => propchain_traits::errors::compliance_codes::COMPLIANCE_EXPIRED,
+                Error::InvalidRiskScore => propchain_traits::errors::compliance_codes::COMPLIANCE_CHECK_FAILED,
+                Error::InvalidDocumentType => propchain_traits::errors::compliance_codes::COMPLIANCE_DOCUMENT_MISSING,
+                Error::JurisdictionNotSupported => propchain_traits::errors::compliance_codes::COMPLIANCE_CHECK_FAILED,
+            }
+        }
+
+        fn error_description(&self) -> &'static str {
+            match self {
+                Error::NotAuthorized => "Caller does not have permission to perform this operation",
+                Error::NotVerified => "The user has not completed verification",
+                Error::VerificationExpired => "The user's verification has expired and needs renewal",
+                Error::HighRisk => "The user has been assessed as high risk",
+                Error::ProhibitedJurisdiction => "The user's jurisdiction is prohibited",
+                Error::AlreadyVerified => "The user is already verified",
+                Error::ConsentNotGiven => "The user has not provided required consent",
+                Error::DataRetentionExpired => "The data retention period has expired",
+                Error::InvalidRiskScore => "The risk score is invalid or out of range",
+                Error::InvalidDocumentType => "The document type is invalid or not supported",
+                Error::JurisdictionNotSupported => "The jurisdiction is not supported",
+            }
+        }
+
+        fn error_category(&self) -> ErrorCategory {
+            ErrorCategory::Compliance
+        }
     }
 
     pub type Result<T> = core::result::Result<T, Error>;
