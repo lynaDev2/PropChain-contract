@@ -3,9 +3,11 @@
 pub mod access_control;
 pub mod constants;
 pub mod errors;
+pub mod monitoring;
 
 pub use access_control::*;
 pub use errors::*;
+pub use monitoring::*;
 use ink::prelude::string::String;
 use ink::primitives::AccountId;
 
