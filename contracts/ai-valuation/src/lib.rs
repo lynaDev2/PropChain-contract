@@ -958,5 +958,19 @@ mod ai_valuation {
             assert!(engine.register_model(model.clone()).is_ok());
             assert_eq!(engine.get_model("test_model".to_string()), Some(model));
         }
+
+        fn track_gas(&self, operation: &str, start: u64) {
+    let used = start.saturating_sub(self.env().gas_left());
+    self.env().emit_event(GasUsage {
+        operation: operation.to_string(),
+        weight_used: used,
+    });
+}
+#[ink(event)]
+pub struct GasUsage {
+    #[ink(topic)]
+    operation: String,
+    weight_used: u64,
+}
     }
 }
