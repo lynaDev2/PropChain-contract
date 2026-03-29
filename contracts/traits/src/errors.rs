@@ -63,6 +63,9 @@ pub trait ContractError: fmt::Debug + fmt::Display + Encode + Decode {
             4000..=4999 => ErrorCategory::Oracle,
             5000..=5999 => ErrorCategory::Fees,
             6000..=6999 => ErrorCategory::Compliance,
+            7000..=7999 => ErrorCategory::Dex,
+            8000..=8999 => ErrorCategory::Governance,
+            9000..=9999 => ErrorCategory::Staking,
             7000..=7999 => ErrorCategory::Governance,
             8000..=8999 => ErrorCategory::Staking,
             9000..=9999 => ErrorCategory::Monitoring,
@@ -102,6 +105,7 @@ pub enum ErrorCategory {
     Oracle,
     Fees,
     Compliance,
+    Dex,
     Governance,
     Staking,
     Monitoring,
@@ -118,6 +122,7 @@ impl fmt::Display for ErrorCategory {
             ErrorCategory::Oracle => write!(f, "Oracle"),
             ErrorCategory::Fees => write!(f, "Fees"),
             ErrorCategory::Compliance => write!(f, "Compliance"),
+            ErrorCategory::Dex => write!(f, "Dex"),
             ErrorCategory::Governance => write!(f, "Governance"),
             ErrorCategory::Staking => write!(f, "Staking"),
             ErrorCategory::Monitoring => write!(f, "Monitoring"),
@@ -342,35 +347,54 @@ pub mod compliance_codes {
     pub const COMPLIANCE_DATA_RETENTION_EXPIRED: u32 = 6013;
 }
 
-/// Governance error codes (7000-7999)
-pub mod governance_codes {
-    pub const GOVERNANCE_UNAUTHORIZED: u32 = 7001;
-    pub const GOVERNANCE_PROPOSAL_NOT_FOUND: u32 = 7002;
-    pub const GOVERNANCE_ALREADY_VOTED: u32 = 7003;
-    pub const GOVERNANCE_PROPOSAL_CLOSED: u32 = 7004;
-    pub const GOVERNANCE_THRESHOLD_NOT_MET: u32 = 7005;
-    pub const GOVERNANCE_TIMELOCK_ACTIVE: u32 = 7006;
-    pub const GOVERNANCE_INVALID_THRESHOLD: u32 = 7007;
-    pub const GOVERNANCE_SIGNER_EXISTS: u32 = 7008;
-    pub const GOVERNANCE_SIGNER_NOT_FOUND: u32 = 7009;
-    pub const GOVERNANCE_MIN_SIGNERS: u32 = 7010;
-    pub const GOVERNANCE_MAX_PROPOSALS: u32 = 7011;
-    pub const GOVERNANCE_NOT_A_SIGNER: u32 = 7012;
-    pub const GOVERNANCE_PROPOSAL_EXPIRED: u32 = 7013;
+/// DEX error codes (7000-7999)
+pub mod dex_codes {
+    pub const DEX_UNAUTHORIZED: u32 = 7001;
+    pub const DEX_INVALID_PAIR: u32 = 7002;
+    pub const DEX_POOL_NOT_FOUND: u32 = 7003;
+    pub const DEX_INSUFFICIENT_LIQUIDITY: u32 = 7004;
+    pub const DEX_SLIPPAGE_EXCEEDED: u32 = 7005;
+    pub const DEX_ORDER_NOT_FOUND: u32 = 7006;
+    pub const DEX_INVALID_ORDER: u32 = 7007;
+    pub const DEX_ORDER_NOT_EXECUTABLE: u32 = 7008;
+    pub const DEX_REWARD_UNAVAILABLE: u32 = 7009;
+    pub const DEX_PROPOSAL_NOT_FOUND: u32 = 7010;
+    pub const DEX_PROPOSAL_CLOSED: u32 = 7011;
+    pub const DEX_ALREADY_VOTED: u32 = 7012;
+    pub const DEX_INVALID_BRIDGE_ROUTE: u32 = 7013;
+    pub const DEX_CROSS_CHAIN_TRADE_NOT_FOUND: u32 = 7014;
+    pub const DEX_INSUFFICIENT_GOVERNANCE_BALANCE: u32 = 7015;
 }
 
-/// Staking error codes (8000-8999)
+/// Governance error codes (8000-8999)
+pub mod governance_codes {
+    pub const GOVERNANCE_UNAUTHORIZED: u32 = 8001;
+    pub const GOVERNANCE_PROPOSAL_NOT_FOUND: u32 = 8002;
+    pub const GOVERNANCE_ALREADY_VOTED: u32 = 8003;
+    pub const GOVERNANCE_PROPOSAL_CLOSED: u32 = 8004;
+    pub const GOVERNANCE_THRESHOLD_NOT_MET: u32 = 8005;
+    pub const GOVERNANCE_TIMELOCK_ACTIVE: u32 = 8006;
+    pub const GOVERNANCE_INVALID_THRESHOLD: u32 = 8007;
+    pub const GOVERNANCE_SIGNER_EXISTS: u32 = 8008;
+    pub const GOVERNANCE_SIGNER_NOT_FOUND: u32 = 8009;
+    pub const GOVERNANCE_MIN_SIGNERS: u32 = 8010;
+    pub const GOVERNANCE_MAX_PROPOSALS: u32 = 8011;
+    pub const GOVERNANCE_NOT_A_SIGNER: u32 = 8012;
+    pub const GOVERNANCE_PROPOSAL_EXPIRED: u32 = 8013;
+}
+
+/// Staking error codes (9000-9999)
 pub mod staking_codes {
-    pub const STAKING_UNAUTHORIZED: u32 = 8001;
-    pub const STAKING_INSUFFICIENT_AMOUNT: u32 = 8002;
-    pub const STAKING_NOT_FOUND: u32 = 8003;
-    pub const STAKING_LOCK_ACTIVE: u32 = 8004;
-    pub const STAKING_NO_REWARDS: u32 = 8005;
-    pub const STAKING_INSUFFICIENT_POOL: u32 = 8006;
-    pub const STAKING_INVALID_CONFIG: u32 = 8007;
-    pub const STAKING_ALREADY_STAKED: u32 = 8008;
-    pub const STAKING_INVALID_DELEGATE: u32 = 8009;
-    pub const STAKING_ZERO_AMOUNT: u32 = 8010;
+    pub const STAKING_UNAUTHORIZED: u32 = 9001;
+    pub const STAKING_INSUFFICIENT_AMOUNT: u32 = 9002;
+    pub const STAKING_NOT_FOUND: u32 = 9003;
+    pub const STAKING_LOCK_ACTIVE: u32 = 9004;
+    pub const STAKING_NO_REWARDS: u32 = 9005;
+    pub const STAKING_INSUFFICIENT_POOL: u32 = 9006;
+    pub const STAKING_INVALID_CONFIG: u32 = 9007;
+    pub const STAKING_ALREADY_STAKED: u32 = 9008;
+    pub const STAKING_INVALID_DELEGATE: u32 = 9009;
+    pub const STAKING_ZERO_AMOUNT: u32 = 9010;
 }
 
 /// Monitoring error codes (9000-9999)

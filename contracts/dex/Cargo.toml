@@ -1,17 +1,14 @@
 [package]
-name = "tax-compliance"
-version = "0.1.0"
+name = "propchain-dex"
+version = "1.0.0"
+authors = ["PropChain Team <dev@propchain.io>"]
 edition = "2021"
-description = "Deterministic property tax and legal compliance automation module"
 
 [dependencies]
 ink = { workspace = true, default-features = false }
 scale = { workspace = true, default-features = false }
 scale-info = { workspace = true, default-features = false }
 propchain-traits = { path = "../traits", default-features = false }
-
-[dev-dependencies]
-ink_e2e = "5.0.0"
 
 [lib]
 path = "src/lib.rs"
