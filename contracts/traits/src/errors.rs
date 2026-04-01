@@ -66,9 +66,7 @@ pub trait ContractError: fmt::Debug + fmt::Display + Encode + Decode {
             7000..=7999 => ErrorCategory::Dex,
             8000..=8999 => ErrorCategory::Governance,
             9000..=9999 => ErrorCategory::Staking,
-            7000..=7999 => ErrorCategory::Governance,
-            8000..=8999 => ErrorCategory::Staking,
-            9000..=9999 => ErrorCategory::Monitoring,
+            10000..=10999 => ErrorCategory::Monitoring,
             _ => ErrorCategory::Unknown,
         }
     }
@@ -397,13 +395,13 @@ pub mod staking_codes {
     pub const STAKING_ZERO_AMOUNT: u32 = 9010;
 }
 
-/// Monitoring error codes (9000-9999)
+/// Monitoring error codes (10000-10999)
 pub mod monitoring_codes {
-    pub const MONITORING_UNAUTHORIZED: u32 = 9001;
-    pub const MONITORING_CONTRACT_PAUSED: u32 = 9002;
-    pub const MONITORING_INVALID_THRESHOLD: u32 = 9003;
-    pub const MONITORING_SUBSCRIBER_LIMIT_REACHED: u32 = 9004;
-    pub const MONITORING_SUBSCRIBER_NOT_FOUND: u32 = 9005;
+    pub const MONITORING_UNAUTHORIZED: u32 = 10001;
+    pub const MONITORING_CONTRACT_PAUSED: u32 = 10002;
+    pub const MONITORING_INVALID_THRESHOLD: u32 = 10003;
+    pub const MONITORING_SUBSCRIBER_LIMIT_REACHED: u32 = 10004;
+    pub const MONITORING_SUBSCRIBER_NOT_FOUND: u32 = 10005;
 }
 
 #[cfg(test)]

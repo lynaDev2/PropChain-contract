@@ -26,6 +26,7 @@ members = [
     "contracts/third-party",
     "contracts/staking",
     "contracts/governance",
+    "tests",
     "indexer",
 ]
 resolver = "2"

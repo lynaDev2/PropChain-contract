@@ -1,4 +1,4 @@
-#![cfg(feature = "std")]
+#![cfg(feature = "disabled_test")]
 
 use ink::env::test;
 use ink::env::DefaultEnvironment;

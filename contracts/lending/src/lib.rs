@@ -346,7 +346,7 @@ mod propchain_lending {
                 if self.total_staked == 0 {
                     return 0;
                 }
-                let per_share = (self.reward_per_block * current_block) / self.total_staked;
+                let per_share = (self.reward_per_block * current_block as u128) / self.total_staked;
                 p.staked * per_share - p.reward_debt
             } else {
                 0

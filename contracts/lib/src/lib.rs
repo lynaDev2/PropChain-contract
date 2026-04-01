@@ -24,7 +24,7 @@ pub mod error_handling;
 pub mod audit;
 
 #[ink::contract]
-mod propchain_contracts {
+pub mod propchain_contracts {
     use super::*;
     use crate::audit::{AuditRecord, AuditTrail};
 

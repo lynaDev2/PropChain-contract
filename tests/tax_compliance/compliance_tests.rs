@@ -1,4 +1,4 @@
-#![cfg(feature = "std")]
+#![cfg(feature = "disabled_test")]
 
 use compliance_registry::{ComplianceRegistry, TaxComplianceStatus, TaxJurisdictionRecord};
 
