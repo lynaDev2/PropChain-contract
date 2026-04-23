@@ -1603,7 +1603,9 @@ pub mod propchain_contracts {
             }
             let caller = self.env().caller();
             let is_admin = self.access_control.has_role(caller, Role::Admin);
-            let is_guardian = self.pause_guardians.get(caller).unwrap_or(false);
+            // Accept either the legacy pause_guardians mapping or the RBAC PauseGuardian role
+            let is_guardian = self.pause_guardians.get(caller).unwrap_or(false)
+                || self.access_control.has_role(caller, Role::PauseGuardian);
 
             if !is_admin && !is_guardian {
                 self.log_audit_event(
@@ -1651,7 +1653,8 @@ pub mod propchain_contracts {
             Ok(())
         }
 
-        /// Emergency pause - same as pause but implies critical severity
+        /// Emergency pause - can be called by admin, PauseGuardian role, or pause_guardians mapping.
+        /// Logs an EmergencyAction audit event before pausing with no auto-resume.
         #[ink(message)]
         pub fn emergency_pause(&mut self, reason: String) -> Result<(), Error> {
             let caller = self.env().caller();
@@ -1663,6 +1666,52 @@ pub mod propchain_contracts {
                 0,
             );
             self.pause_contract(reason, None)
+        }
+
+        /// Force an immediate contract-wide emergency stop. SuperAdmin only.
+        ///
+        /// Unlike `emergency_pause`, this overrides an already-paused state,
+        /// clears any pending auto-resume, and requires a multi-sig resume
+        /// regardless of `required_approvals`. Use only in critical incidents.
+        #[ink(message)]
+        pub fn force_emergency_stop(&mut self, reason: String) -> Result<(), Error> {
+            use propchain_traits::constants::MAX_REASON_LENGTH;
+            Self::validate_string_length(&reason, MAX_REASON_LENGTH)?;
+            let caller = self.env().caller();
+            if !self.access_control.has_role(caller, Role::SuperAdmin) {
+                self.log_audit_event(
+                    caller,
+                    SecurityEventType::UnauthorizedAccess,
+                    SecuritySeverity::Critical,
+                    0,
+                    0,
+                );
+                return Err(Error::Unauthorized);
+            }
+            let timestamp = self.env().block_timestamp();
+            self.pause_info.paused = true;
+            self.pause_info.paused_at = Some(timestamp);
+            self.pause_info.paused_by = Some(caller);
+            self.pause_info.reason = Some(reason.clone());
+            // Disable any time-based auto-resume — explicit approval required
+            self.pause_info.auto_resume_at = None;
+            self.pause_info.resume_request_active = false;
+            self.pause_info.resume_approvals.clear();
+
+            self.env().emit_event(ContractPaused {
+                by: caller,
+                reason,
+                timestamp,
+                auto_resume_at: None,
+            });
+            self.log_audit_event(
+                caller,
+                SecurityEventType::EmergencyAction,
+                SecuritySeverity::Critical,
+                0,
+                1, // extra_data=1 signals force-stop
+            );
+            Ok(())
         }
 
         /// Provide a mechanism to try auto-resume if time passed
@@ -1691,9 +1740,9 @@ pub mod propchain_contracts {
         #[ink(message)]
         pub fn request_resume(&mut self) -> Result<(), Error> {
             let caller = self.env().caller();
-            // Only admin or guardians can request resume
             let is_admin = self.access_control.has_role(caller, Role::Admin);
-            let is_guardian = self.pause_guardians.get(caller).unwrap_or(false);
+            let is_guardian = self.pause_guardians.get(caller).unwrap_or(false)
+                || self.access_control.has_role(caller, Role::PauseGuardian);
 
             if !is_admin && !is_guardian {
                 return Err(Error::Unauthorized);
@@ -1731,7 +1780,8 @@ pub mod propchain_contracts {
         pub fn approve_resume(&mut self) -> Result<(), Error> {
             let caller = self.env().caller();
             let is_admin = self.access_control.has_role(caller, Role::Admin);
-            let is_guardian = self.pause_guardians.get(caller).unwrap_or(false);
+            let is_guardian = self.pause_guardians.get(caller).unwrap_or(false)
+                || self.access_control.has_role(caller, Role::PauseGuardian);
 
             if !is_admin && !is_guardian {
                 return Err(Error::Unauthorized);
