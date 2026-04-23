@@ -128,8 +128,8 @@ fn main() -> Result<()> {
         Commands::CheckSchedule { schedule_file } => {
             let content = fs::read_to_string(&schedule_file)
                 .context(format!("Cannot read schedule file: {schedule_file}"))?;
-            let schedule: AuditSchedule = serde_json::from_str(&content)
-                .context("audit-schedule.json is malformed")?;
+            let schedule: AuditSchedule =
+                serde_json::from_str(&content).context("audit-schedule.json is malformed")?;
 
             let last = chrono::NaiveDate::parse_from_str(&schedule.last_audit_date, "%Y-%m-%d")
                 .context("last_audit_date must be YYYY-MM-DD")?;
@@ -137,21 +137,35 @@ fn main() -> Result<()> {
             let days_since = (today - last).num_days().max(0) as u64;
             let overdue = days_since > schedule.max_interval_days;
 
-            println!("Last audit : {} (by {})", schedule.last_audit_date, schedule.auditor);
+            println!(
+                "Last audit : {} (by {})",
+                schedule.last_audit_date, schedule.auditor
+            );
             if let Some(url) = &schedule.report_url {
                 println!("Report     : {url}");
             }
             if let Some(next) = &schedule.next_audit_date {
                 println!("Next audit : {next}");
             }
-            println!("Days since last audit : {days_since} / {} allowed", schedule.max_interval_days);
+            println!(
+                "Days since last audit : {days_since} / {} allowed",
+                schedule.max_interval_days
+            );
 
             if overdue {
-                println!("{}", "WARNING: Third-party audit is overdue! Schedule one immediately.".red().bold());
+                println!(
+                    "{}",
+                    "WARNING: Third-party audit is overdue! Schedule one immediately."
+                        .red()
+                        .bold()
+                );
                 std::process::exit(1);
             } else {
                 let remaining = schedule.max_interval_days - days_since;
-                println!("{}", format!("OK: next audit due in {remaining} day(s).").green());
+                println!(
+                    "{}",
+                    format!("OK: next audit due in {remaining} day(s).").green()
+                );
             }
             return Ok(());
         }
