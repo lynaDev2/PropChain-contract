@@ -929,7 +929,7 @@ pub mod propchain_identity {
 
             // Calculate success rate
             let success_rate = if metrics.total_transactions > 0 {
-                (metrics.successful_transactions * 100) / metrics.total_transactions
+                metrics.successful_transactions.saturating_mul(100).checked_div(metrics.total_transactions).unwrap_or(50)
             } else {
                 50 // Default for no history
             };
@@ -938,7 +938,7 @@ pub mod propchain_identity {
             ((base_score as u64 * 40)
                 + (reputation_factor as u64 / 10 * 30)
                 + (verification_bonus as u64 * 20)
-                + (success_rate as u64 * 10)) as u32
+                + (success_rate * 10)) as u32
                 / 100
         }
 
