@@ -80,6 +80,11 @@ pub mod property_token {
         management_agent: Mapping<TokenId, AccountId>,
         /// Vesting schedules for tokens (TokenId, AccountId)
         vesting_schedules: Mapping<(TokenId, AccountId), VestingSchedule>,
+<<<<<<< feature/issue-192-metadata-updates
+        /// Custom URI overrides for tokens
+        token_uris: Mapping<TokenId, String>,
+=======
+>>>>>>> main
     }
 
     // Data types extracted to types.rs (Issue #101)
@@ -146,6 +151,23 @@ pub mod property_token {
         pub verified: bool,
         #[ink(topic)]
         pub verifier: AccountId,
+    }
+
+    #[ink(event)]
+    pub struct MetadataUpdated {
+        #[ink(topic)]
+        pub token_id: TokenId,
+        #[ink(topic)]
+        pub updated_by: AccountId,
+    }
+
+    #[ink(event)]
+    pub struct TokenURIUpdated {
+        #[ink(topic)]
+        pub token_id: TokenId,
+        #[ink(topic)]
+        pub updated_by: AccountId,
+        pub new_uri: String,
     }
 
     // --- Bridge Events ---
@@ -409,6 +431,10 @@ pub mod property_token {
                 property_management_contract: None,
                 management_agent: Mapping::default(),
                 vesting_schedules: Mapping::default(),
+<<<<<<< feature/issue-192-metadata-updates
+                token_uris: Mapping::default(),
+=======
+>>>>>>> main
             }
         }
 
@@ -642,6 +668,10 @@ pub mod property_token {
         /// ERC-1155: Returns the URI for a token
         #[ink(message)]
         pub fn uri(&self, token_id: TokenId) -> Option<String> {
+            // First check if there is a custom URI override
+            if let Some(custom_uri) = self.token_uris.get(token_id) {
+                return Some(custom_uri);
+            }
             // Return a standard URI format for the token metadata
             let _property_info = self.token_properties.get(token_id)?;
             Some(format!(
@@ -1307,7 +1337,57 @@ pub mod property_token {
             out
         }
 
-        /// Returns the tax record for an account and token, summarizing dividends and sales.
+        // =========================================================================
+        // Metadata Methods
+        // =========================================================================
+
+        /// Updates the on-chain metadata for a property
+        #[ink(message)]
+        pub fn update_property_metadata(
+            &mut self,
+            token_id: TokenId,
+            metadata: PropertyMetadata,
+        ) -> Result<(), Error> {
+            let caller = self.env().caller();
+            let owner = self.token_owner.get(token_id).ok_or(Error::TokenNotFound)?;
+            if caller != self.admin && caller != owner {
+                return Err(Error::Unauthorized);
+            }
+
+            let mut property_info = self.token_properties.get(token_id).ok_or(Error::TokenNotFound)?;
+            property_info.metadata = metadata;
+            self.token_properties.insert(token_id, &property_info);
+
+            self.env().emit_event(MetadataUpdated {
+                token_id,
+                updated_by: caller,
+            });
+
+            Ok(())
+        }
+
+        /// Sets a custom URI for a token, overriding the default generated format
+        #[ink(message)]
+        pub fn set_token_uri(&mut self, token_id: TokenId, new_uri: String) -> Result<(), Error> {
+            let caller = self.env().caller();
+            let owner = self.token_owner.get(token_id).ok_or(Error::TokenNotFound)?;
+            if caller != self.admin && caller != owner {
+                return Err(Error::Unauthorized);
+            }
+
+            self.token_uris.insert(token_id, &new_uri);
+
+            self.env().emit_event(TokenURIUpdated {
+                token_id,
+                updated_by: caller,
+                new_uri,
+            });
+
+            Ok(())
+        }
+
+        // =========================================================================
+        // Returns the tax record for an account and token, summarizing dividends and sales.
         #[ink(message)]
         pub fn get_tax_record(&self, owner: AccountId, token_id: TokenId) -> TaxRecord {
             self.tax_records
