@@ -85,6 +85,10 @@ pub mod property_token {
         vesting_schedules: Mapping<(TokenId, AccountId), VestingSchedule>,
         /// Custom URI overrides for tokens
         token_uris: Mapping<TokenId, String>,
+        /// Snapshot functionality for governance voting (Issue #194)
+        snapshot_counter: Mapping<TokenId, u64>,
+        snapshots: Mapping<(TokenId, u64), Snapshot>,
+        account_snapshots: Mapping<(AccountId, TokenId, u64), u128>, // (account, token_id, snapshot_id) -> balance
     }
 
     // Data types extracted to types.rs (Issue #101)
@@ -310,6 +314,28 @@ pub mod property_token {
         pub passed: bool,
     }
 
+    // --- Snapshot Events (Issue #194) ---
+    #[ink(event)]
+    pub struct SnapshotCreated {
+        #[ink(topic)]
+        pub token_id: TokenId,
+        #[ink(topic)]
+        pub snapshot_id: u64,
+        pub total_supply: u128,
+        pub description: String,
+    }
+
+    #[ink(event)]
+    pub struct SnapshotBalanceQueried {
+        #[ink(topic)]
+        pub token_id: TokenId,
+        #[ink(topic)]
+        pub snapshot_id: u64,
+        #[ink(topic)]
+        pub account: AccountId,
+        pub balance: u128,
+    }
+
     // --- Marketplace Events ---
     #[ink(event)]
     pub struct AskPlaced {
@@ -469,6 +495,9 @@ pub mod property_token {
                 management_agent: Mapping::default(),
                 vesting_schedules: Mapping::default(),
                 token_uris: Mapping::default(),
+                snapshot_counter: Mapping::default(),
+                snapshots: Mapping::default(),
+                account_snapshots: Mapping::default(),
             }
         }
 
@@ -1180,6 +1209,93 @@ pub mod property_token {
                 passed,
             });
             Ok(passed)
+        }
+
+        /// Creates a snapshot for the property token to capture governance state.
+        #[ink(message)]
+        pub fn create_snapshot(
+            &mut self,
+            token_id: TokenId,
+            description: String,
+        ) -> Result<u64, Error> {
+            if self.token_owner.get(token_id).is_none() {
+                return Err(Error::TokenNotFound);
+            }
+            let snapshot_id = self
+                .snapshot_counter
+                .get(token_id)
+                .unwrap_or(0)
+                .saturating_add(1);
+            self.snapshot_counter.insert(token_id, &snapshot_id);
+            let snapshot = Snapshot {
+                id: snapshot_id,
+                token_id,
+                created_at: self.env().block_timestamp(),
+                total_supply_at_snapshot: self.total_supply,
+                description: description.clone(),
+            };
+            self.snapshots.insert((token_id, snapshot_id), &snapshot);
+            self.env().emit_event(SnapshotCreated {
+                token_id,
+                snapshot_id,
+                total_supply: self.total_supply,
+                description,
+            });
+            Ok(snapshot_id)
+        }
+
+        /// Records the balance of an account for a specific snapshot.
+        #[ink(message)]
+        pub fn record_snapshot_balance(
+            &mut self,
+            token_id: TokenId,
+            snapshot_id: u64,
+            account: AccountId,
+        ) -> Result<u128, Error> {
+            if self.snapshots.get((token_id, snapshot_id)).is_none() {
+                return Err(Error::InvalidRequest);
+            }
+            let balance = self.balances.get((account, token_id)).unwrap_or(0);
+            self.account_snapshots
+                .insert((account, token_id, snapshot_id), &balance);
+            self.env().emit_event(SnapshotBalanceQueried {
+                token_id,
+                snapshot_id,
+                account,
+                balance,
+            });
+            Ok(balance)
+        }
+
+        /// Returns the recorded snapshot balance for an account.
+        #[ink(message)]
+        pub fn get_balance_at_snapshot(
+            &self,
+            token_id: TokenId,
+            snapshot_id: u64,
+            account: AccountId,
+        ) -> Result<u128, Error> {
+            let balance = self
+                .account_snapshots
+                .get((account, token_id, snapshot_id))
+                .unwrap_or(0);
+            Ok(balance)
+        }
+
+        /// Returns snapshot metadata by token and snapshot ID.
+        #[ink(message)]
+        pub fn get_snapshot(
+            &self,
+            token_id: TokenId,
+            snapshot_id: u64,
+        ) -> Option<Snapshot> {
+            self.snapshots.get((token_id, snapshot_id))
+        }
+
+        /// Returns the latest snapshot ID for a token.
+        #[ink(message)]
+        pub fn latest_snapshot_id(&self, token_id: TokenId) -> u64 {
+            self.snapshot_counter.get(token_id).unwrap_or(0)
         }
 
         /// Places a sell order (ask) for fractional shares on the marketplace.

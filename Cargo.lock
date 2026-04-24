@@ -5882,6 +5882,7 @@ dependencies = [
  "propchain-traits",
  "property-token",
  "proptest",
+ "rand 0.8.5",
  "scale-info",
  "serde",
  "serde_json",
