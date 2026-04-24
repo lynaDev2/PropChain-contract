@@ -2,7 +2,10 @@
 #![allow(
     unexpected_cfgs,
     clippy::type_complexity,
-    clippy::needless_borrows_for_generic_args
+    clippy::needless_borrows_for_generic_args,
+    clippy::cast_possible_truncation,
+    clippy::arithmetic_side_effects,
+    clippy::cast_sign_loss
 )]
 
 use ink::prelude::string::String;
@@ -14,7 +17,6 @@ use scale_info::prelude::vec::Vec;
 #[ink::contract]
 pub mod property_token {
     use super::*;
-    use propchain_traits::constants::*;
 
     // Error types extracted to errors.rs (Issue #101)
     include!("errors.rs");
@@ -82,14 +84,6 @@ pub mod property_token {
         property_management_contract: Option<AccountId>,
         /// On-chain management agent per property token (tokenized property)
         management_agent: Mapping<TokenId, AccountId>,
-
-        // Share staking (Issue #197)
-        share_stakes: Mapping<(AccountId, TokenId), ShareStakeInfo>,
-        share_total_staked: Mapping<TokenId, u128>,
-        share_reward_pool: Mapping<TokenId, u128>,
-        share_acc_reward_per_share: Mapping<TokenId, u128>,
-        share_last_reward_block: Mapping<TokenId, u64>,
-        share_reward_rate_bps: Mapping<TokenId, u128>,
         /// Vesting schedules for tokens (TokenId, AccountId)
         vesting_schedules: Mapping<(TokenId, AccountId), VestingSchedule>,
         /// Custom URI overrides for tokens
@@ -473,13 +467,16 @@ pub mod property_token {
 
             // Initialize default bridge configuration
             let bridge_config = BridgeConfig {
-                supported_chains: vec![1, 2, 3], // Default supported chains
+                supported_chains: vec![1, 2, 3],
                 min_signatures_required: 2,
                 max_signatures_required: 5,
                 default_timeout_blocks: 100,
                 gas_limit_per_bridge: 500000,
                 emergency_pause: false,
                 metadata_preservation: true,
+                rate_limit_enabled: false,
+                max_requests_per_day: 1000,
+                max_value_per_day: 10_000_000,
             };
             let current_chain = bridge_config.supported_chains[0];
 
@@ -541,12 +538,6 @@ pub mod property_token {
                 max_batch_size: 50,
                 property_management_contract: None,
                 management_agent: Mapping::default(),
-                share_stakes: Mapping::default(),
-                share_total_staked: Mapping::default(),
-                share_reward_pool: Mapping::default(),
-                share_acc_reward_per_share: Mapping::default(),
-                share_last_reward_block: Mapping::default(),
-                share_reward_rate_bps: Mapping::default(),
                 vesting_schedules: Mapping::default(),
                 token_uris: Mapping::default(),
                 snapshot_counter: Mapping::default(),
@@ -1097,7 +1088,7 @@ pub mod property_token {
             {
                 return Err(Error::Unauthorized);
             }
-            let weight = self.governance_weight(voter, token_id);
+            let weight = self.balances.get((voter, token_id)).unwrap_or(0);
             if support {
                 proposal.for_votes = proposal.for_votes.saturating_add(weight);
             } else {

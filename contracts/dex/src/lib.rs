@@ -2,6 +2,7 @@
 #![allow(unexpected_cfgs)]
 
 use ink::prelude::{string::String, vec::Vec};
+use ink::prelude::vec::Vec;
 use ink::storage::Mapping;
 use propchain_traits::*;
 
@@ -111,6 +112,26 @@ mod dex {
         pub top_n: u32,
         pub reward_token_symbol: String,
         pub active: bool,
+    pub struct AdminActionScheduled {
+        #[ink(topic)]
+        pub action_id: u64,
+        #[ink(topic)]
+        pub proposer: AccountId,
+        pub kind: AdminActionKind,
+        pub executable_at: u64,
+    }
+
+    #[ink(event)]
+    pub struct AdminActionExecuted {
+        #[ink(topic)]
+        pub action_id: u64,
+        pub kind: AdminActionKind,
+    }
+
+    #[ink(event)]
+    pub struct AdminActionCancelled {
+        #[ink(topic)]
+        pub action_id: u64,
     }
 
     #[ink(storage)]
@@ -140,6 +161,9 @@ mod dex {
         competition_scores: Mapping<(u64, AccountId), u128>,
         competition_participants: Mapping<u64, Vec<AccountId>>,
         competition_claimed: Mapping<(u64, AccountId), bool>,
+        admin_timelock_delay: u64,
+        pending_admin_actions: Mapping<u64, PendingAdminAction>,
+        pending_admin_action_counter: u64,
     }
 
     impl PropertyDex {
@@ -187,6 +211,9 @@ mod dex {
                 competition_scores: Mapping::default(),
                 competition_participants: Mapping::default(),
                 competition_claimed: Mapping::default(),
+                admin_timelock_delay: 0,
+                pending_admin_actions: Mapping::default(),
+                pending_admin_action_counter: 0,
             };
             instance
                 .governance_balances
@@ -599,15 +626,10 @@ mod dex {
             if self.env().caller() != self.admin {
                 return Err(Error::Unauthorized);
             }
-            self.bridge_quotes.insert(
-                destination_chain,
-                &BridgeFeeQuote {
-                    destination_chain,
-                    gas_estimate,
-                    protocol_fee,
-                    total_fee: protocol_fee.saturating_add(gas_estimate as u128),
-                },
-            );
+            if self.admin_timelock_delay > 0 {
+                return Err(Error::TimelockRequired);
+            }
+            self.apply_configure_bridge_route(destination_chain, gas_estimate, protocol_fee);
             Ok(())
         }
 
@@ -697,13 +719,15 @@ mod dex {
             if self.env().caller() != self.admin {
                 return Err(Error::Unauthorized);
             }
-            self.liquidity_mining = LiquidityMiningCampaign {
+            if self.admin_timelock_delay > 0 {
+                return Err(Error::TimelockRequired);
+            }
+            self.apply_set_liquidity_mining(
                 emission_rate,
                 start_block,
                 end_block,
                 reward_token_symbol,
-            };
-            self.governance_config.emission_rate = emission_rate;
+            );
             Ok(())
         }
 
@@ -1697,6 +1721,314 @@ mod dex {
             self.governance_balances.get(account).unwrap_or(0)
         }
 
+        #[ink(message)]
+        pub fn get_admin_timelock_delay(&self) -> u64 {
+            self.admin_timelock_delay
+        }
+
+        #[ink(message)]
+        pub fn set_admin_timelock_delay(&mut self, delay_blocks: u64) -> Result<(), Error> {
+            if self.env().caller() != self.admin {
+                return Err(Error::Unauthorized);
+            }
+            if self.admin_timelock_delay > 0 {
+                return Err(Error::TimelockRequired);
+            }
+            self.admin_timelock_delay = delay_blocks;
+            Ok(())
+        }
+
+        #[ink(message)]
+        pub fn schedule_bridge_route_update(
+            &mut self,
+            destination_chain: ChainId,
+            gas_estimate: u64,
+            protocol_fee: u128,
+        ) -> Result<u64, Error> {
+            let payload = AdminActionPayload {
+                destination_chain,
+                gas_estimate,
+                protocol_fee,
+                ..empty_admin_action_payload()
+            };
+            self.schedule_admin_action_internal(AdminActionKind::ConfigureBridgeRoute, payload)
+        }
+
+        #[ink(message)]
+        pub fn schedule_liquidity_mining_update(
+            &mut self,
+            emission_rate: u128,
+            start_block: u64,
+            end_block: u64,
+            reward_token_symbol: String,
+        ) -> Result<u64, Error> {
+            let payload = AdminActionPayload {
+                emission_rate,
+                start_block,
+                end_block,
+                reward_token_symbol,
+                ..empty_admin_action_payload()
+            };
+            self.schedule_admin_action_internal(AdminActionKind::SetLiquidityMining, payload)
+        }
+
+        #[ink(message)]
+        pub fn schedule_timelock_delay_update(&mut self, delay_blocks: u64) -> Result<u64, Error> {
+            let payload = AdminActionPayload {
+                timelock_delay_blocks: delay_blocks,
+                ..empty_admin_action_payload()
+            };
+            self.schedule_admin_action_internal(AdminActionKind::UpdateTimelockDelay, payload)
+        }
+
+        #[ink(message)]
+        pub fn execute_admin_action(&mut self, action_id: u64) -> Result<(), Error> {
+            if self.env().caller() != self.admin {
+                return Err(Error::Unauthorized);
+            }
+            let mut action = self
+                .pending_admin_actions
+                .get(action_id)
+                .ok_or(Error::AdminActionNotFound)?;
+            if !matches!(action.status, AdminActionStatus::Scheduled) {
+                return Err(Error::AdminActionAlreadyFinalized);
+            }
+            let current_block = u64::from(self.env().block_number());
+            if current_block < action.executable_at {
+                return Err(Error::TimelockActive);
+            }
+            match action.kind {
+                AdminActionKind::ConfigureBridgeRoute => {
+                    self.apply_configure_bridge_route(
+                        action.payload.destination_chain,
+                        action.payload.gas_estimate,
+                        action.payload.protocol_fee,
+                    );
+                }
+                AdminActionKind::SetLiquidityMining => {
+                    self.apply_set_liquidity_mining(
+                        action.payload.emission_rate,
+                        action.payload.start_block,
+                        action.payload.end_block,
+                        action.payload.reward_token_symbol.clone(),
+                    );
+                }
+                AdminActionKind::UpdateTimelockDelay => {
+                    self.admin_timelock_delay = action.payload.timelock_delay_blocks;
+                }
+            }
+            action.status = AdminActionStatus::Executed;
+            let kind = action.kind;
+            self.pending_admin_actions.insert(action_id, &action);
+            self.env()
+                .emit_event(AdminActionExecuted { action_id, kind });
+            Ok(())
+        }
+
+        #[ink(message)]
+        pub fn cancel_admin_action(&mut self, action_id: u64) -> Result<(), Error> {
+            if self.env().caller() != self.admin {
+                return Err(Error::Unauthorized);
+            }
+            let mut action = self
+                .pending_admin_actions
+                .get(action_id)
+                .ok_or(Error::AdminActionNotFound)?;
+            if !matches!(action.status, AdminActionStatus::Scheduled) {
+                return Err(Error::AdminActionAlreadyFinalized);
+            }
+            action.status = AdminActionStatus::Cancelled;
+            self.pending_admin_actions.insert(action_id, &action);
+            self.env().emit_event(AdminActionCancelled { action_id });
+            Ok(())
+        }
+
+        #[ink(message)]
+        pub fn get_scheduled_admin_action(&self, action_id: u64) -> Option<PendingAdminAction> {
+            self.pending_admin_actions.get(action_id)
+        }
+
+        fn schedule_admin_action_internal(
+            &mut self,
+            kind: AdminActionKind,
+            payload: AdminActionPayload,
+        ) -> Result<u64, Error> {
+            let caller = self.env().caller();
+            if caller != self.admin {
+                return Err(Error::Unauthorized);
+            }
+            self.pending_admin_action_counter = self.pending_admin_action_counter.saturating_add(1);
+            let action_id = self.pending_admin_action_counter;
+            let scheduled_at = u64::from(self.env().block_number());
+            let executable_at = scheduled_at.saturating_add(self.admin_timelock_delay);
+            let action = PendingAdminAction {
+                action_id,
+                kind,
+                payload,
+                proposer: caller,
+                scheduled_at,
+                executable_at,
+                status: AdminActionStatus::Scheduled,
+            };
+            self.pending_admin_actions.insert(action_id, &action);
+            self.env().emit_event(AdminActionScheduled {
+                action_id,
+                proposer: caller,
+                kind,
+                executable_at,
+            });
+            Ok(action_id)
+        }
+
+        fn apply_configure_bridge_route(
+            &mut self,
+            destination_chain: ChainId,
+            gas_estimate: u64,
+            protocol_fee: u128,
+        ) {
+            self.bridge_quotes.insert(
+                destination_chain,
+                &BridgeFeeQuote {
+                    destination_chain,
+                    gas_estimate,
+                    protocol_fee,
+                    total_fee: protocol_fee.saturating_add(gas_estimate as u128),
+                },
+            );
+        }
+
+        fn apply_set_liquidity_mining(
+            &mut self,
+            emission_rate: u128,
+            start_block: u64,
+            end_block: u64,
+            reward_token_symbol: String,
+        ) {
+            self.liquidity_mining = LiquidityMiningCampaign {
+                emission_rate,
+                start_block,
+                end_block,
+                reward_token_symbol,
+            };
+            self.governance_config.emission_rate = emission_rate;
+        }
+
+        #[ink(message)]
+        pub fn get_order_book_snapshot(
+            &self,
+            pair_id: u64,
+            max_levels: u32,
+        ) -> Result<OrderBookSnapshot, Error> {
+            let _ = self.pool(pair_id)?;
+            let bids = self.collect_order_book_levels(pair_id, OrderSide::Buy, max_levels);
+            let asks = self.collect_order_book_levels(pair_id, OrderSide::Sell, max_levels);
+
+            let best_bid = bids.first().map(|level| level.price).unwrap_or(0);
+            let best_ask = asks.first().map(|level| level.price).unwrap_or(0);
+            let spread = if best_bid > 0 && best_ask > best_bid {
+                best_ask - best_bid
+            } else {
+                0
+            };
+            let mid_price = if best_bid > 0 && best_ask > 0 {
+                best_bid.saturating_add(best_ask) / 2
+            } else if best_bid > 0 {
+                best_bid
+            } else {
+                best_ask
+            };
+            let total_bid_depth = bids
+                .iter()
+                .fold(0u128, |acc, level| acc.saturating_add(level.total_amount));
+            let total_ask_depth = asks
+                .iter()
+                .fold(0u128, |acc, level| acc.saturating_add(level.total_amount));
+            let analytics = self.analytics_for(pair_id);
+
+            Ok(OrderBookSnapshot {
+                pair_id,
+                bids,
+                asks,
+                best_bid,
+                best_ask,
+                spread,
+                mid_price,
+                total_bid_depth,
+                total_ask_depth,
+                last_price: analytics.last_price,
+                last_updated: analytics.last_updated,
+            })
+        }
+
+        #[ink(message)]
+        pub fn get_order_book_levels(
+            &self,
+            pair_id: u64,
+            side: OrderSide,
+            max_levels: u32,
+        ) -> Result<Vec<OrderBookLevel>, Error> {
+            let _ = self.pool(pair_id)?;
+            Ok(self.collect_order_book_levels(pair_id, side, max_levels))
+        }
+
+        fn collect_order_book_levels(
+            &self,
+            pair_id: u64,
+            side: OrderSide,
+            max_levels: u32,
+        ) -> Vec<OrderBookLevel> {
+            let count = self.order_book_count.get(pair_id).unwrap_or(0);
+            let mut levels: Vec<OrderBookLevel> = Vec::new();
+            for idx in 0..count {
+                let order_id = match self.order_book.get((pair_id, idx)) {
+                    Some(order_id) => order_id,
+                    None => continue,
+                };
+                let order = match self.orders.get(order_id) {
+                    Some(order) => order,
+                    None => continue,
+                };
+                if order.side != side {
+                    continue;
+                }
+                if !matches!(
+                    order.status,
+                    OrderStatus::Open | OrderStatus::PartiallyFilled | OrderStatus::Triggered
+                ) {
+                    continue;
+                }
+                if order.remaining_amount == 0 || order.price == 0 {
+                    continue;
+                }
+                if let Some(existing) = levels.iter_mut().find(|level| level.price == order.price) {
+                    existing.total_amount =
+                        existing.total_amount.saturating_add(order.remaining_amount);
+                    existing.order_count = existing.order_count.saturating_add(1);
+                } else {
+                    levels.push(OrderBookLevel {
+                        price: order.price,
+                        total_amount: order.remaining_amount,
+                        order_count: 1,
+                        cumulative_amount: 0,
+                        side,
+                    });
+                }
+            }
+            match side {
+                OrderSide::Buy => levels.sort_by(|a, b| b.price.cmp(&a.price)),
+                OrderSide::Sell => levels.sort_by(|a, b| a.price.cmp(&b.price)),
+            }
+            if max_levels > 0 && (max_levels as usize) < levels.len() {
+                levels.truncate(max_levels as usize);
+            }
+            let mut cumulative = 0u128;
+            for level in levels.iter_mut() {
+                cumulative = cumulative.saturating_add(level.total_amount);
+                level.cumulative_amount = cumulative;
+            }
+            levels
+        }
+
         /// Get comprehensive trading statistics across all pairs
         #[ink(message)]
         pub fn get_trading_statistics(&self) -> TradingStatistics {
@@ -2167,6 +2499,19 @@ mod dex {
         }
     }
 
+    fn empty_admin_action_payload() -> AdminActionPayload {
+        AdminActionPayload {
+            destination_chain: 0,
+            gas_estimate: 0,
+            protocol_fee: 0,
+            emission_rate: 0,
+            start_block: 0,
+            end_block: 0,
+            reward_token_symbol: String::new(),
+            timelock_delay_blocks: 0,
+        }
+    }
+
     fn ordered_pair(base: TokenId, quote: TokenId) -> (TokenId, TokenId) {
         if base < quote {
             (base, quote)
@@ -2224,5 +2569,6 @@ mod dex {
     }
 
     // Include unit tests
+    #[cfg(test)]
     include!("tests.rs");
 }
