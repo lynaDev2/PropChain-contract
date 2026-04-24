@@ -34,6 +34,8 @@ impl core::fmt::Display for Error {
             Error::InsufficientLiquidity => write!(f, "Insufficient liquidity"),
             Error::SlippageExceeded => write!(f, "Slippage tolerance exceeded"),
             Error::OrderNotFound => write!(f, "Order not found"),
+            Error::InvalidOrder => write!(f, "Order parameters are invalid"),
+            Error::OrderNotExecutable => write!(f, "Order is not executable"),
             Error::InvalidRequest => write!(f, "Invalid request"),
             Error::RewardUnavailable => write!(f, "Reward unavailable"),
             Error::ProposalNotFound => write!(f, "Governance proposal not found"),

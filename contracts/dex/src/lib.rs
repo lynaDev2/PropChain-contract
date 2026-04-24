@@ -2,7 +2,6 @@
 #![allow(unexpected_cfgs)]
 
 use ink::prelude::{string::String, vec::Vec};
-use ink::prelude::vec::Vec;
 use ink::storage::Mapping;
 use propchain_traits::*;
 
@@ -112,6 +111,9 @@ mod dex {
         pub top_n: u32,
         pub reward_token_symbol: String,
         pub active: bool,
+    }
+
+    #[ink(event)]
     pub struct AdminActionScheduled {
         #[ink(topic)]
         pub action_id: u64,
